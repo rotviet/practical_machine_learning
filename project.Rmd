@@ -1,8 +1,8 @@
 
 
 ###Title: Practical Machine Learning - Final Project
---Author: Viet Nguyen
---Date: August 13, 2016
+-- Author: Viet Nguyen
+-- Date: August 13, 2016
 
 
 
@@ -14,7 +14,7 @@ Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible t
 - Working Directory and load data
 ```{r}
 setwd("C:/Users/user/Desktop/RWD/PML")
-set.seed(12345)
+set.seed(5000)
 
 library(knitr)
 library(caret)
@@ -31,38 +31,75 @@ training <- read.csv(url(trainUrl))
 testing <- read.csv(url(testUrl)) 
 ```
 
-- Partioning the training set
+##Partitioning data for sample error and cross validation
+- Partitioning the training set for cross validation and out of sample error calculation 
+- Testing is used for cross validation
+- Divide the Training set into 2 equal sets.
+
 ```{r}
 library(caret)
-inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
-Training <- training[inTrain,]
-Testing <- training[-inTrain,]
-dim(Training); dim(Testing)
+set.seed(5000)
+ids_small <- createDataPartition(training$classe, p=0.5, list=FALSE)
+df_small1 <- training[ids_small,]
+df_small2 <- training[-ids_small,]
+# Divide each of these 2 sets into training (60%) and test (40%) sets.
+# Set1
+set.seed(1000)
+inTrain <- createDataPartition(df_small1$classe, p=0.6, list=FALSE)
+Training <- df_small1[inTrain,]
+Testing <- df_small1[-inTrain,]
+set.seed(1000)
+#Set2
+inTrain1 <- createDataPartition(df_small2$classe, p=0.6, list=FALSE)
+Training1 <- df_small2[inTrain1,]
+Testing1 <- df_small2[-inTrain1,]
+
+dim(Training);dim(Training1)
 ```
 ## Cleaning the data
 
 - Remove NearZeroVariance variables
 ```{r}
+# For set1
 NZV <- nearZeroVar(Training)
 Training <- Training[, -NZV]
 Testing  <- Testing[, -NZV]
 dim(Training); dim(Testing)
 
+# For set2
+NZV1 <- nearZeroVar(Training1)
+Training1 <- Training1[, -NZV1]
+Testing1  <- Testing1[, -NZV1]
+dim(Training1); dim(Testing1)
+
 ```
 
 - Remove NA variables
 ```{r}
+# For set1
 AllNA    <- sapply(Training, function(x) mean(is.na(x))) > 0.95
 Training <- Training[, AllNA==FALSE]
 Testing  <- Testing[, AllNA==FALSE]
 dim(Training); dim(Testing)
+
+# For set2
+AllNA1    <- sapply(Training1, function(x) mean(is.na(x))) > 0.95
+Training1 <- Training1[, AllNA1==FALSE]
+Testing1  <- Testing1[, AllNA1==FALSE]
+dim(Training1); dim(Testing1)
 ```
 
 - Rmove identification only variables (columns 1 to 5)
 ```{r}
+# For set 1
 Training <- Training[, -(1:5)]
 Testing  <- Testing[, -(1:5)]
 dim(Training); dim(Testing)
+
+# For set 2
+Training1 <- Training1[, -(1:5)]
+Testing1  <- Testing1[, -(1:5)]
+dim(Training1); dim(Testing1)
 ```
 
 
@@ -71,7 +108,7 @@ Three prediction model methods - Random Forests, Decision Tree and Generalized B
 
 ##1.Decision Trees
 ```{r}
-set.seed(12345)
+set.seed(5000)
 DecTree <- rpart(classe ~ ., data=Training, method="class")
 fancyRpartPlot(DecTree)
 ```
@@ -91,7 +128,7 @@ plot(confMatDecTree$table, col = confMatDecTree$byClass, main = paste("Decision 
 
 ##2.Random Forest
 ```{r}
-set.seed(12345)
+set.seed(5000)
 RF <- trainControl(method="cv", number=3, verboseIter=FALSE)
 modFitRandForest <- train(classe ~ ., data=Training, method="rf",trControl=RF)
 modFitRandForest$finalModel
@@ -109,9 +146,9 @@ confMatRandForest
 plot(confMatRandForest$table, col = confMatRandForest$byClass, main = paste("Random Forest with accuracy =", round(confMatRandForest$overall['Accuracy'], 4)))
 ```
 
-###3.Generalized Boosted Model
+##3.Generalized Boosted Model
 ```{r}
-set.seed(12345)
+set.seed(5000)
 GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
 
 modFitGBM  <- train(classe ~ ., data=Training, method = "gbm", trControl = GBM, verbose = FALSE)
@@ -133,9 +170,36 @@ plot(confMatGBM$table, col = confMatGBM$byClass, main = paste("GBM with accuracy
 
 ###Results and apply the models to the quiz
 The accuracy of the 3 regression modeling methods:
-Decision Tree : 0.7368
-Random Forest : 0.9963
-GBM : 0.9839
+Decision Tree : 0.7301
+Random Forest : 0.9924
+GBM : 0.9796
+
+## Out of sample error:
+I applied Random Forest model on the second data set that was divided in the beginning.
+```{r}
+set.seed(5000)
+RF1 <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest1 <- train(classe ~ ., data=Training1, method="rf",trControl=RF1)
+modFitRandForest1$finalModel
+```
+
+-- Applied it to testing set
+```{r}
+predictRandForest1 <- predict(modFitRandForest1, newdata=Testing1)
+confMatRandForest1 <- confusionMatrix(predictRandForest1, Testing1$classe)
+confMatRandForest
+```
+
+-- Plot the results
+```{r}
+plot(confMatRandForest1$table, col = confMatRandForest1$byClass, main = paste("Random Forest for second data set with accuracy =", round(confMatRandForest1$overall['Accuracy'], 4)))
+```
+
+
+For data set 1: Accuracy = 0.9963 => out of sample error: 1 - 0.9924 = 0.0076
+For data set 2: Accurart = 0.9929 => out of sample error: 1- 0.9929 = 0.0071
+Since each testing set has same size, then the overall out of sample error is avarage of these two number, or (0.0076 + 0.0071)/2 ~ 0.0074
+
 
 Random Forest is the best among these. It is applied to predict 20 cases in the quiz:
 ```{r}
