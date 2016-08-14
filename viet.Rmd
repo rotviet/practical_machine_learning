@@ -1,0 +1,144 @@
+
+
+###Title: Practical Machine Learning - Final Project
+--Author: Viet Nguyen
+--Date: August 13, 2016
+
+
+
+## Overview 
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Preparation step: Data andlibraries loading
+- Working Directory and load data
+```{r}
+setwd("C:/Users/user/Desktop/RWD/PML")
+set.seed(12345)
+
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(trainUrl))
+testing <- read.csv(url(testUrl)) 
+```
+
+- Partioning the training set
+```{r}
+library(caret)
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+Training <- training[inTrain,]
+Testing <- training[-inTrain,]
+dim(Training); dim(Testing)
+```
+## Cleaning the data
+
+- Remove NearZeroVariance variables
+```{r}
+NZV <- nearZeroVar(Training)
+Training <- Training[, -NZV]
+Testing  <- Testing[, -NZV]
+dim(Training); dim(Testing)
+
+```
+
+- Remove NA variables
+```{r}
+AllNA    <- sapply(Training, function(x) mean(is.na(x))) > 0.95
+Training <- Training[, AllNA==FALSE]
+Testing  <- Testing[, AllNA==FALSE]
+dim(Training); dim(Testing)
+```
+
+- Rmove identification only variables (columns 1 to 5)
+```{r}
+Training <- Training[, -(1:5)]
+Testing  <- Testing[, -(1:5)]
+dim(Training); dim(Testing)
+```
+
+
+###Prediction Model Building
+Three prediction model methods - Random Forests, Decision Tree and Generalized Boosted Model - will be applied for the Training dataset, then the best one with highest accuracy when applied to the Test dataset would be used for the quiz predictions. 
+
+##1.Decision Trees
+```{r}
+set.seed(12345)
+DecTree <- rpart(classe ~ ., data=Training, method="class")
+fancyRpartPlot(DecTree)
+```
+
+-Applied it to Testing Set
+```{r}
+predictDecTree <- predict(DecTree, newdata=Testing, type="class")
+confMatDecTree <- confusionMatrix(predictDecTree, Testing$classe)
+confMatDecTree
+```
+
+-- Plot the results
+```{r}
+plot(confMatDecTree$table, col = confMatDecTree$byClass, main = paste("Decision Tree with accuracy = ",round(confMatDecTree$overall['Accuracy'], 4)))
+```
+
+
+##2.Random Forest
+```{r}
+set.seed(12345)
+RF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=Training, method="rf",trControl=RF)
+modFitRandForest$finalModel
+```
+
+-- Applied it to testing set
+```{r}
+predictRandForest <- predict(modFitRandForest, newdata=Testing)
+confMatRandForest <- confusionMatrix(predictRandForest, Testing$classe)
+confMatRandForest
+```
+
+-- Plot the results
+```{r}
+plot(confMatRandForest$table, col = confMatRandForest$byClass, main = paste("Random Forest with accuracy =", round(confMatRandForest$overall['Accuracy'], 4)))
+```
+
+###3.Generalized Boosted Model
+```{r}
+set.seed(12345)
+GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+
+modFitGBM  <- train(classe ~ ., data=Training, method = "gbm", trControl = GBM, verbose = FALSE)
+
+modFitGBM$finalModel
+```
+
+-- Applied it to Testing Set
+```{r}
+predictGBM <- predict(modFitGBM, newdata=Testing)
+confMatGBM <- confusionMatrix(predictGBM, Testing$classe)
+confMatGBM
+```
+
+-- Plot the results
+```{r}
+plot(confMatGBM$table, col = confMatGBM$byClass, main = paste("GBM with accuracy = ", round(confMatGBM$overall['Accuracy'], 4)))
+```
+
+###Results and apply the models to the quiz
+The accuracy of the 3 regression modeling methods:
+Decision Tree : 0.7368
+Random Forest : 0.9963
+GBM : 0.9839
+
+Random Forest is the best among these. It is applied to predict 20 cases in the quiz:
+```{r}
+predictTEST <- predict(modFitRandForest, newdata=testing)
+predictTEST
+```
